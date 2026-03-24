@@ -34,4 +34,4 @@ Most path-distribution tools use "parametric" math, which causes objects to crow
 
 Built with TypeScript and a custom-engineered Bezier evaluation engine. No heavy frameworks, just high-performance vector math.
 
-Created by [Nischal Subedi](https://github.com/nischalmudennavar).
+Created by [Nischal Mudennavar](https://github.com/nischalmudennavar).
