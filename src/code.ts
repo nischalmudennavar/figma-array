@@ -352,6 +352,12 @@ figma.ui.onmessage = async (msg) => {
           : 0
         : msg.gap;
 
+    // Use absoluteTransform so coordinates are always in page (world) space,
+    // even when the path node lives inside a frame or a nested group.
+    const pathTransform = pathNode.absoluteTransform;
+    const ptA = pathTransform[0][0], ptC = pathTransform[0][1], ptTx = pathTransform[0][2];
+    const ptB = pathTransform[1][0], ptD = pathTransform[1][1], ptTy = pathTransform[1][2];
+
     const clones: SceneNode[] = [];
 
     for (let i = 0; i < count; i++) {
@@ -374,9 +380,17 @@ figma.ui.onmessage = async (msg) => {
       const pos = BezierEngine.evaluate(localT, seg);
       const deriv = BezierEngine.derivative(localT, seg);
 
-      const worldX = pathNode.x + pos.x;
-      const worldY = pathNode.y + pos.y;
-      const angleDeg = Math.atan2(deriv.y, deriv.x) * (180 / Math.PI);
+      // Map local path coordinates → page world coordinates via absoluteTransform.
+      // This is the fix for paths inside frames: pathNode.x/y would only be
+      // frame-relative, but absoluteTransform gives the true page position.
+      const worldX = ptA * pos.x + ptC * pos.y + ptTx;
+      const worldY = ptB * pos.x + ptD * pos.y + ptTy;
+
+      // Also rotate the derivative by the linear part of the transform so that
+      // "rotate to path" stays correct even when the path node itself is rotated.
+      const worldDx = ptA * deriv.x + ptC * deriv.y;
+      const worldDy = ptB * deriv.x + ptD * deriv.y;
+      const angleDeg = Math.atan2(worldDy, worldDx) * (180 / Math.PI);
 
       const clone = (shapeNode.type === "COMPONENT") 
         ? (shapeNode as ComponentNode).createInstance() 

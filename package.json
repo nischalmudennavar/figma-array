@@ -4,7 +4,7 @@
   "description": "",
   "main": "dist/code.js",
   "scripts": {
-    "build": "tsc && powershell -Command Copy-Item src/ui.html dist/ui.html",
+    "build": "tsc && copyfiles -f src/ui.html dist/",
     "watch": "tsc --watch"
   },
   "keywords": [],
@@ -13,6 +13,7 @@
   "type": "commonjs",
   "devDependencies": {
     "@figma/plugin-typings": "^1.123.0",
+    "copyfiles": "^2.4.1",
     "typescript": "^5.0.0"
   }
 }
