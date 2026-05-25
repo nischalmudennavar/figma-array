@@ -279,6 +279,16 @@
         </div>
       </div>
 
+      <div class="prop-row" id="scaleSettings">
+        <span class="prop-lbl">Scale Multiplier</span>
+        <div class="prop-ctrl">
+          <div class="num-wrap">
+            <input type="number" id="scaleInput" value="1.0" step="0.05"/>
+            <span class="num-unit">x</span>
+          </div>
+        </div>
+      </div>
+
       <div class="divider"></div>
 
       <div class="sec-label">Options</div>
@@ -303,6 +313,7 @@
       const state = {
         shapeId: null, pathId: null,
         mode: "even", count: 5, gap: 100,
+        scaleMultiplier: 1.0,
         rotateToPath: true,
       };
 
@@ -319,6 +330,7 @@
 
       const countInput    = document.getElementById("countInput");
       const gapInput      = document.getElementById("gapInput");
+      const scaleInput    = document.getElementById("scaleInput");
 
       let debounceTimer;
       function requestGenerate(isRealTime = true) {
@@ -358,6 +370,11 @@
 
       gapInput.oninput = (e) => {
         state.gap = Math.max(1, parseFloat(e.target.value) || 1);
+        requestGenerate();
+      };
+
+      scaleInput.oninput = (e) => {
+        state.scaleMultiplier = parseFloat(e.target.value) || 1.0;
         requestGenerate();
       };
 

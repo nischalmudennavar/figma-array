@@ -32,6 +32,7 @@ interface GenerateParams {
   mode: "even" | "fixed";
   count: number;
   gap: number;
+  scaleMultiplier: number;
   rotateToPath: boolean;
   isRealTime: boolean;
 }
@@ -168,14 +169,25 @@ function placeClone(
   angleDeg: number,
   rotate: boolean,
   container: BaseNode,
+  scale: number = 1,
 ): void {
   const lt = worldToLocal(cx, cy, container);
+
+  if (scale !== 1 && scale > 0.001) {
+    if ("rescale" in clone) {
+      clone.rescale(scale);
+    } else if ("resize" in clone) {
+      clone.resize(Math.max(0.01, clone.width * scale), Math.max(0.01, clone.height * scale));
+    }
+  }
+
+  const w = clone.width;
+  const h = clone.height;
+
   if (rotate) {
     const angle = angleDeg * (Math.PI / 180);
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
-    const w = clone.width;
-    const h = clone.height;
     // Translate so the center (w/2, h/2) lands at the local target point
     const tx = lt.x - cos * (w / 2) + sin * (h / 2);
     const ty = lt.y - sin * (w / 2) - cos * (h / 2);
@@ -184,8 +196,12 @@ function placeClone(
       [sin,  cos, ty],
     ];
   } else {
-    clone.x = lt.x - clone.width / 2;
-    clone.y = lt.y - clone.height / 2;
+    const tx = lt.x - w / 2;
+    const ty = lt.y - h / 2;
+    clone.relativeTransform = [
+      [1, 0, tx],
+      [0, 1, ty],
+    ];
   }
 }
 
@@ -213,7 +229,7 @@ function collectDescendantIds(node: BaseNode): Set<string> {
 // Plugin state
 // ─────────────────────────────────────────────────────────────────────────────
 
-figma.showUI(__html__, { width: 300, height: 524 });
+figma.showUI(__html__, { width: 300, height: 580 });
 
 /** Tracks the current generated group so it can be removed on re-generate. */
 let currentArrayGroup: GroupNode | null = null;
@@ -286,6 +302,7 @@ async function runGenerate(params: GenerateParams): Promise<void> {
     const mode: "even" | "fixed" = String(params.mode) === "fixed" ? "fixed" : "even";
     const rawCount = Math.max(2, parseInt(String(params.count), 10) || 2);
     const rawGap   = Math.max(1, parseFloat(String(params.gap)) || 1);
+    const scaleMultiplier = parseFloat(String(params.scaleMultiplier)) || 1;
 
     const count    = mode === "even" ? rawCount : Math.floor(totalLength / rawGap) + 1;
     const stepDist = mode === "even" ? (count > 1 ? totalLength / (count - 1) : 0) : rawGap;
@@ -295,11 +312,22 @@ async function runGenerate(params: GenerateParams): Promise<void> {
     const ptA = pathTransform[0][0], ptC = pathTransform[0][1], ptTx = pathTransform[0][2];
     const ptB = pathTransform[1][0], ptD = pathTransform[1][1], ptTy = pathTransform[1][2];
 
+    // Get initial visual scale of the source shape to preserve it
+    const st = shapeNode.absoluteTransform;
+    const absScaleSource = Math.sqrt(st[0][0] ** 2 + st[0][1] ** 2);
+
     // Output goes into the same container as the path (frame or page)
     const outputContainer: BaseNode & ChildrenMixin =
       pathNode.parent && pathNode.parent.type !== "PAGE"
         ? pathNode.parent
         : figma.currentPage;
+
+    // Get container scale to calculate correct relative scale for clones
+    const ct = (outputContainer.type === "PAGE") 
+      ? [[1, 0, 0], [0, 1, 0]] 
+      : (outputContainer as SceneNode).absoluteTransform;
+    const absScaleContainer = Math.sqrt(ct[0][0] ** 2 + ct[1][0] ** 2);
+    const baseRelativeScale = absScaleSource / absScaleContainer;
 
     const clones: SceneNode[] = [];
 
@@ -337,7 +365,9 @@ async function runGenerate(params: GenerateParams): Promise<void> {
 
       // Append to container BEFORE setting position (required for correct coords)
       outputContainer.appendChild(clone);
-      placeClone(clone, worldX, worldY, angleDeg, !!params.rotateToPath, outputContainer);
+
+      const currentScale = baseRelativeScale * Math.pow(scaleMultiplier, i);
+      placeClone(clone, worldX, worldY, angleDeg, !!params.rotateToPath, outputContainer, currentScale);
       clones.push(clone);
     }
 
@@ -476,15 +506,16 @@ figma.ui.onmessage = async (msg: any) => {
 
     // Persist params for documentchange auto-sync — plain values only, no node refs
     lastGenParams = {
-      shapeId:      msg.shapeId,
-      pathId:       msg.pathId,
-      mode:         msg.mode,
-      count:        msg.count,
-      gap:          msg.gap,
-      rotateToPath: msg.rotateToPath,
-      isRealTime:   !!msg.isRealTime,
+      shapeId:         msg.shapeId,
+      pathId:          msg.pathId,
+      mode:            msg.mode,
+      count:           msg.count,
+      gap:             msg.gap,
+      scaleMultiplier: msg.scaleMultiplier,
+      rotateToPath:    msg.rotateToPath,
+      isRealTime:      !!msg.isRealTime,
     };
 
     await runGenerate(lastGenParams);
   }
-};
+  };
