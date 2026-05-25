@@ -304,8 +304,24 @@ async function runGenerate(params: GenerateParams): Promise<void> {
     const rawGap   = Math.max(1, parseFloat(String(params.gap)) || 1);
     const scaleMultiplier = parseFloat(String(params.scaleMultiplier)) || 1;
 
-    const count    = mode === "even" ? rawCount : Math.floor(totalLength / rawGap) + 1;
-    const stepDist = mode === "even" ? (count > 1 ? totalLength / (count - 1) : 0) : rawGap;
+    let initialStepDist = 0;
+    let maxItems = 0;
+
+    if (mode === "even") {
+      maxItems = rawCount;
+      if (maxItems > 1) {
+        if (Math.abs(scaleMultiplier - 1) < 0.001) {
+          initialStepDist = totalLength / (maxItems - 1);
+        } else {
+          // Sum of geometric series: d * (r^N - 1) / (r - 1) = totalLength where N = maxItems - 1
+          const N = maxItems - 1;
+          initialStepDist = (totalLength * (scaleMultiplier - 1)) / (Math.pow(scaleMultiplier, N) - 1);
+        }
+      }
+    } else {
+      initialStepDist = rawGap;
+      maxItems = 10000; // Safety limit for fixed mode
+    }
 
     // ── Frame-aware placement: use absoluteTransform, not .x/.y ────────────
     const pathTransform = pathNode.absoluteTransform;
@@ -331,8 +347,14 @@ async function runGenerate(params: GenerateParams): Promise<void> {
 
     const clones: SceneNode[] = [];
 
-    for (let i = 0; i < count; i++) {
-      const targetDist = i * stepDist;
+    for (let i = 0; i < maxItems; i++) {
+      let targetDist = 0;
+      if (Math.abs(scaleMultiplier - 1) < 0.001) {
+        targetDist = i * initialStepDist;
+      } else {
+        targetDist = initialStepDist * (Math.pow(scaleMultiplier, i) - 1) / (scaleMultiplier - 1);
+      }
+
       if (targetDist > totalLength + 0.5) break;
 
       let lo = 0, hi = segments.length - 1;
